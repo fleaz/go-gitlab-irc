@@ -39,7 +39,7 @@ import (
 
 func CreateFunctionNotifyFunction(bot *irc.Connection) http.HandlerFunc {
 
-	const templateString = `{{ .Alert.Labels.instance }} {{ .Alert.Labels.alertname}} - {{ .Alert.Annotations.description}} {{ .Notification.Status }}`
+	const templateString = "[ {{ .ColorStart }}{{ .Notification.Status }}{{ .ColorEnd }} ] {{ .Alert.Labels.instance }} {{ .Alert.Labels.alertname}} - {{ .Alert.Annotations.description}}"
 
 	notificationTemplate, err := template.New("notification").Parse(templateString)
 	if err != nil {
@@ -146,10 +146,14 @@ func CreateFunctionNotifyFunction(bot *irc.Connection) http.HandlerFunc {
 			type NotificationContext struct {
 				Alert        *Alert
 				Notification *Notification
+				ColorStart   string
+				ColorEnd     string
 			}
 			context := NotificationContext{
 				Alert:        &alert,
 				Notification: &notification,
+				ColorStart:   getColorcode(notification.Status),
+				ColorEnd:     "\x03",
 			}
 
 			var buf bytes.Buffer
@@ -159,6 +163,17 @@ func CreateFunctionNotifyFunction(bot *irc.Connection) http.HandlerFunc {
 
 	}
 
+}
+
+func getColorcode(status string) string {
+	switch status {
+	case "firing":
+		return "\x0305"
+	case "resolved":
+		return "\x0303"
+	default:
+		return "\x0300"
+	}
 }
 
 func main() {
