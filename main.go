@@ -39,7 +39,7 @@ import (
 
 func CreateFunctionNotifyFunction(bot *irc.Connection) http.HandlerFunc {
 
-	const templateString = "[ {{ .ColorStart }}{{ .Notification.Status }}{{ .ColorEnd }} ] {{ .Alert.Labels.instance }} {{ .Alert.Labels.alertname}} - {{ .Alert.Annotations.description}}"
+	const templateString = "{{ .Alert.Labels.instance }} {{ .ColorStart }}{{ .Alert.Labels.alertname}}{{ .ColorEnd }} - {{ .Alert.Annotations.description}}"
 
 	notificationTemplate, err := template.New("notification").Parse(templateString)
 	if err != nil {
