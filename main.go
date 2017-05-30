@@ -25,29 +25,6 @@ var (
 	cafile   = flag.String("cafile", "", "Path to the ca file that verifies the server certificate.")
 )
 
-//func RegisterConnect(s ircx.Sender, m *irc.Message) {
-//	log.Println("Connected...")
-//	s.Send(&irc.Message{
-//		Command:       irc.JOIN,
-//		Params:        []string{"#ffda-noc"},
-//		EmptyTrailing: true,
-//	})
-//}
-//
-//func PingHandler(s ircx.Sender, m *irc.Message) {
-//	log.Println("P[IO]NG")
-//	s.Send(&irc.Message{
-//		Command:  irc.PONG,
-//		Params:   m.Params,
-//		Trailing: m.Trailing,
-//	})
-//}
-//
-//func RegisterHandlers(bot *ircx.Bot) {
-//	bot.HandleFunc(irc.RPL_WELCOME, RegisterConnect)
-//	bot.HandleFunc(irc.PING, PingHandler)
-//}
-
 func CreateFunctionNotifyFunction(bot *irc.Connection) http.HandlerFunc {
 
 	const templateString = "{{ .Alert.Labels.instance }} {{ .ColorStart }}{{ .Alert.Labels.alertname}}{{ .ColorEnd }} - {{ .Alert.Annotations.description}}"
@@ -60,65 +37,6 @@ func CreateFunctionNotifyFunction(bot *irc.Connection) http.HandlerFunc {
 	return func(wr http.ResponseWriter, req *http.Request) {
 		defer req.Body.Close()
 		decoder := json.NewDecoder(req.Body)
-		/*
-
-			   {
-			     "version": "3",
-			     "groupKey": <number>     // key identifying the group of alerts (e.g. to deduplicate)
-			     "status": "<resolved|firing>",
-			     "receiver": <string>,
-			     "groupLabels": <object>,
-			     "commonLabels": <object>,
-			     "commonAnnotations": <object>,
-			     "externalURL": <string>,  // backling to the Alertmanager.
-			     "alerts": [
-			       {
-			         "labels": <object>,
-			         "annotations": <object>,
-			         "startsAt": "<rfc3339>",
-			         "endsAt": "<rfc3339>"
-			       },
-			       ...
-			     ]
-			   }
-
-			---
-
-
-			{"version":"3",
-			 "groupKey":16716837308297233527,
-			  "status":"firing",
-			  "receiver":"irc",
-			  "groupLabels":{
-				  "alertname":"InstanceHighCpu"
-			  },
-			  "commonLabels":{
-				  "alertname":"InstanceHighCpu",
-				  "severity":"page"
-			  },
-			  "commonAnnotations":{
-				  "description":" has high cpu activity",
-				  "summary":"Instance : cpu high"
-			  },
-			  "externalURL":"http://elsa.darmstadt.freifunk.net:9093",
-			  "alerts":[
-			  	{"labels":{
-					"alertname":"InstanceHighCpu",
-					"severity":"page"
-				},
-				"annotations":{
-					"description":
-					" has high cpu activity",
-					"summary":"Instance : cpu high"
-				},
-				"startsAt":"2017-02-28T03:00:22.803+01:00",
-				"endsAt":"0001-01-01T00:00:00Z"
-				}
-			  ]
-			}
-
-
-		*/
 
 		type Alert struct {
 			Labels      map[string]interface{} `json:"labels"`
@@ -163,7 +81,7 @@ func CreateFunctionNotifyFunction(bot *irc.Connection) http.HandlerFunc {
 			context := NotificationContext{
 				Alert:        &alert,
 				Notification: &notification,
-				ColorStart:   getColorcode(notification.Status),
+				ColorStart:   notification.Status,
 				ColorEnd:     "\x03",
 			}
 
@@ -174,17 +92,6 @@ func CreateFunctionNotifyFunction(bot *irc.Connection) http.HandlerFunc {
 
 	}
 
-}
-
-func getColorcode(status string) string {
-	switch status {
-	case "firing":
-		return "\x0305"
-	case "resolved":
-		return "\x0303"
-	default:
-		return "\x0300"
-	}
 }
 
 func main() {
@@ -221,7 +128,7 @@ func main() {
 
 	go func() {
 		http.HandleFunc("/notify", CreateFunctionNotifyFunction(irccon))
-		http.ListenAndServe("127.0.0.1:8083", nil)
+		http.ListenAndServe("127.0.0.1:8084", nil)
 	}()
 
 	irccon.Loop()
