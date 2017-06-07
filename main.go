@@ -5,6 +5,7 @@ import (
 	"crypto/tls"
 	"crypto/x509"
 	"encoding/json"
+	"flag"
 	"html/template"
 	"io/ioutil"
 	"log"
@@ -12,6 +13,16 @@ import (
 	"github.com/thoj/go-ircevent"
 
 	"net/http"
+	"strconv"
+)
+
+var (
+	host     = flag.String("host", "irc.hackint.org", "Hostname of the IRC server")
+	port     = flag.Int("sslport", 6697, "SSL capable port of the IRC server")
+	channel  = flag.String("channel", "", "Target to send notifications to, likely a channel.")
+	nickname = flag.String("nickname", "go-prom-irc", "Nickname to assume once connected")
+	gecos    = flag.String("gecos", "go-prom-irc", "Realname to assume once connected")
+	cafile   = flag.String("cafile", "", "Path to the ca file that verifies the server certificate.")
 )
 
 //func RegisterConnect(s ircx.Sender, m *irc.Message) {
@@ -158,7 +169,7 @@ func CreateFunctionNotifyFunction(bot *irc.Connection) http.HandlerFunc {
 
 			var buf bytes.Buffer
 			err = notificationTemplate.Execute(&buf, &context)
-			bot.Privmsg("#ffda-mon", buf.String())
+			bot.Privmsg(*channel, buf.String())
 		}
 
 	}
@@ -177,9 +188,10 @@ func getColorcode(status string) string {
 }
 
 func main() {
+	flag.Parse()
 
 	caCertPool := x509.NewCertPool()
-	caCert, err := ioutil.ReadFile("./hackint-rootca.crt")
+	caCert, err := ioutil.ReadFile(*cafile)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -189,7 +201,7 @@ func main() {
 	tlsConfig := &tls.Config{
 		RootCAs: caCertPool,
 	}
-	irccon := irc.IRC("ffda-prom-irc", "ffda-prometheus-notifier")
+	irccon := irc.IRC(*nickname, *gecos)
 
 	irccon.Debug = true
 	irccon.UseTLS = true
@@ -197,7 +209,12 @@ func main() {
 
 	RegisterHandlers(irccon)
 
-	err = irccon.Connect("irc.hackint.org:6697")
+	var server bytes.Buffer
+	server.WriteString(*host)
+	server.WriteString(":")
+	server.WriteString(strconv.Itoa(*port))
+
+	err = irccon.Connect(server.String())
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -212,9 +229,8 @@ func main() {
 
 func RegisterHandlers(irccon *irc.Connection) {
 	irccon.AddCallback("001", func(e *irc.Event) {
-		const channel = "#ffda-mon"
 		log.Printf("Joining %v", channel)
-		irccon.Join(channel)
+		irccon.Join(*channel)
 	})
 	irccon.AddCallback("366", func(e *irc.Event) {})
 }
