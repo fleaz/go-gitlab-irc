@@ -10,15 +10,17 @@ Implements GitLab API and pipe output into the configured IRC channels.
   
 # Configuration
   ```
- Usage of ./go-prom-irc:
+ Usage of ./go-rom-irc:
   -cafile string
     	Path to the ca file that verifies the server certificate.
+  -channelmapping string
+    	Path to the channel mapping file that mapps repository names to irc channels.
   -gecos string
-    	Realname to assume once connected (default "go-prom-irc")
+    	Realname to assume once connected (default "go-gitlab-irc")
   -host string
     	Hostname of the IRC server (default "irc.hackint.org")
   -nickname string
-    	Nickname to assume once connected (default "go-prom-irc")
+    	Nickname to assume once connected (default "go-gitlab-irc")
   -sslport int
     	SSL capable port of the IRC server (default 6697)
 ```

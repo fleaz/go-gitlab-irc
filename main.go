@@ -18,11 +18,12 @@ import (
 )
 
 var (
-	host     = flag.String("host", "irc.hackint.org", "Hostname of the IRC server")
-	port     = flag.Int("sslport", 6697, "SSL capable port of the IRC server")
-	nickname = flag.String("nickname", "go-prom-irc", "Nickname to assume once connected")
-	gecos    = flag.String("gecos", "go-prom-irc", "Realname to assume once connected")
-	cafile   = flag.String("cafile", "", "Path to the ca file that verifies the server certificate.")
+	host           = flag.String("host", "irc.hackint.org", "Hostname of the IRC server")
+	port           = flag.Int("sslport", 6697, "SSL capable port of the IRC server")
+	nickname       = flag.String("nickname", "go-gitlab-irc", "Nickname to assume once connected")
+	channelmapping = flag.String("channelmapping", "channelmapping.yml", "Path to channel mapping file.")
+	gecos          = flag.String("gecos", "go-gitlab-irc", "Realname to assume once connected")
+	cafile         = flag.String("cafile", "hackint-rootca.crt", "Path to the ca file that verifies the server certificate.")
 )
 
 func CreateFunctionNotifyFunction(bot *irc.Connection, channelList map[string][]string) http.HandlerFunc {
@@ -149,7 +150,7 @@ func main() {
 	irccon.TLSConfig = tlsConfig
 
 	channelList := make(map[string][]string)
-	yamlFile, err := ioutil.ReadFile("./channelmapping.yml")
+	yamlFile, err := ioutil.ReadFile(*channelmapping)
 	if err != nil {
 		log.Fatal(err)
 		return
