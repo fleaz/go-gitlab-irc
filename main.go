@@ -6,6 +6,7 @@ import (
 	"crypto/x509"
 	"encoding/json"
 	"flag"
+	"gopkg.in/yaml.v2"
 	"html/template"
 	"io/ioutil"
 	"log"
@@ -24,7 +25,7 @@ var (
 	cafile   = flag.String("cafile", "", "Path to the ca file that verifies the server certificate.")
 )
 
-func CreateFunctionNotifyFunction(bot *irc.Connection) http.HandlerFunc {
+func CreateFunctionNotifyFunction(bot *irc.Connection, channelList map[string][]string) http.HandlerFunc {
 
 	const pushString = "[\x0311 {{ .Project.Name }} \x03] {{ .UserName }} pushed {{ .TotalCommits }} new commits to \x0305{{ .Project.Branch }}\x03"
 	const commitString = "\x0315{{ .ShortID }}\x03 (\x0303{{ .AddedFiles }}\x03,\x0308{{ .ModifiedFiles }}\x03,\x0304{{ .RemovedFiles }}\x03) - {{ .Message }}"
@@ -75,7 +76,10 @@ func CreateFunctionNotifyFunction(bot *irc.Connection) http.HandlerFunc {
 			}
 			var buf bytes.Buffer
 			err = pushTemplate.Execute(&buf, &pushEvent)
-			bot.Privmsg("#fleaz", buf.String())
+
+			var channelNames = channelList[pushEvent.Project.Name]
+
+			sendMessage(buf.String(), channelNames, bot)
 
 			for _, commit := range pushEvent.Commits {
 				type CommitContext struct {
@@ -87,7 +91,7 @@ func CreateFunctionNotifyFunction(bot *irc.Connection) http.HandlerFunc {
 				}
 
 				context := CommitContext{
-					ShortID:       commit.Id[len(commit.Id)-8:],
+					ShortID:       commit.Id[0:8],
 					Message:       commit.Message,
 					AddedFiles:    len(commit.Added),
 					ModifiedFiles: len(commit.Modified),
@@ -96,10 +100,11 @@ func CreateFunctionNotifyFunction(bot *irc.Connection) http.HandlerFunc {
 
 				var buf bytes.Buffer
 				err = commitTemplate.Execute(&buf, &context)
+
 				if err != nil {
 					log.Printf("ERROR: %v", err)
 				}
-				bot.Privmsg("#fleaz", buf.String())
+				sendMessage(buf.String(), channelNames, bot)
 
 			}
 
@@ -107,6 +112,13 @@ func CreateFunctionNotifyFunction(bot *irc.Connection) http.HandlerFunc {
 			log.Printf("Unknown event: %s", eventType)
 		}
 
+	}
+
+}
+
+func sendMessage(message string, channelNames []string, bot *irc.Connection) {
+	for _, channelName := range channelNames {
+		bot.Privmsg(channelName, message)
 	}
 
 }
@@ -131,7 +143,11 @@ func main() {
 	irccon.UseTLS = true
 	irccon.TLSConfig = tlsConfig
 
-	RegisterHandlers(irccon)
+	channelList := make(map[string][]string)
+	yamlFile, err := ioutil.ReadFile("./channelmapping.yml")
+	err = yaml.Unmarshal(yamlFile, channelList)
+
+	RegisterHandlers(irccon, channelList)
 
 	var server bytes.Buffer
 	server.WriteString(*host)
@@ -144,17 +160,22 @@ func main() {
 	}
 
 	go func() {
-		http.HandleFunc("/notify", CreateFunctionNotifyFunction(irccon))
+		http.HandleFunc("/notify", CreateFunctionNotifyFunction(irccon, channelList))
 		http.ListenAndServe("127.0.0.1:8084", nil)
 	}()
 
 	irccon.Loop()
 }
 
-func RegisterHandlers(irccon *irc.Connection) {
+func RegisterHandlers(irccon *irc.Connection, channelList map[string][]string) {
 	irccon.AddCallback("001", func(e *irc.Event) {
-		log.Printf("Joining %v", *channel)
-		irccon.Join(*channel)
+		for _, channelNames := range channelList {
+			for _, channel := range channelNames {
+				log.Printf("Joining %v", channel)
+				irccon.Join(channel)
+			}
+
+		}
 	})
 	irccon.AddCallback("366", func(e *irc.Event) {})
 }
