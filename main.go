@@ -28,8 +28,9 @@ var (
 
 func CreateFunctionNotifyFunction(bot *irc.Connection, channelList map[string][]string) http.HandlerFunc {
 
-	const pushString = "[\x0311 {{ .Project.Name }} \x03] {{ .UserName }} pushed {{ .TotalCommits }} new commits to \x0305{{ .Project.Branch }}\x03"
-	const commitString = "\x0315{{ .ShortID }}\x03 (\x0303{{ .AddedFiles }}\x03,\x0308{{ .ModifiedFiles }}\x03,\x0304{{ .RemovedFiles }}\x03) - {{ .Message }}"
+	const pushString = "[\x0311{{ .Project.Name }}\x03] {{ .UserName }} pushed {{ .TotalCommits }} new commits to \x0305{{ .Project.Branch }}\x03"
+	const commitString = "\x0315{{ .ShortID }}\x03 (\x0303+{{ .AddedFiles }}\x03|\x0308±{{ .ModifiedFiles }}\x03|\x0304-{{ .RemovedFiles }}\x03) - {{ .Message }}"
+	const issueString = "[\x0311{{ .Project.Name }}\x03] {{ .User.Name }} created issue \x0308#{{ .Issue.Id }}\x03: '{{ .Issue.Title }}'"
 
 	pushTemplate, err := template.New("push notification").Parse(pushString)
 	if err != nil {
@@ -41,6 +42,11 @@ func CreateFunctionNotifyFunction(bot *irc.Connection, channelList map[string][]
 		log.Fatalf("Failed to parse commitString template: %v", err)
 	}
 
+	issueTemplate, err := template.New("issue notification").Parse(issueString)
+	if err != nil {
+		log.Fatalf("Failed to parse issueEvent template: %v", err)
+	}
+
 	return func(wr http.ResponseWriter, req *http.Request) {
 		defer req.Body.Close()
 		decoder := json.NewDecoder(req.Body)
@@ -50,6 +56,16 @@ func CreateFunctionNotifyFunction(bot *irc.Connection, channelList map[string][]
 		type Project struct {
 			Name   string `json:"name"`
 			Branch string `json:"default_branch"`
+		}
+
+		type User struct {
+			Name string `json:"name"`
+		}
+
+		type Issue struct {
+			Id          int    `json:"id"`
+			Title       string `json:"title"`
+			Description string `json:"description"`
 		}
 
 		type Commit struct {
@@ -67,7 +83,31 @@ func CreateFunctionNotifyFunction(bot *irc.Connection, channelList map[string][]
 			TotalCommits int      `json:"total_commits_count"`
 		}
 
+		type IssueEvent struct {
+			User    User    `json:"user"`
+			Project Project `json:"project"`
+			Issue   Issue   `json:"object_attributes"`
+		}
+
+		var buf bytes.Buffer
+
 		switch eventType {
+
+		case "Issue Hook":
+			var issueEvent IssueEvent
+			if err := decoder.Decode(&issueEvent); err != nil {
+				log.Println(err)
+				return
+			}
+			err = issueTemplate.Execute(&buf, &issueEvent)
+
+			var channelNames = channelList[issueEvent.Project.Name]
+			if len(channelNames) == 0 {
+				log.Fatal("Project exists not in ChannelMapping")
+				return
+			}
+
+			sendMessage(buf.String(), channelNames, bot)
 
 		case "Push Hook":
 			var pushEvent PushEvent
@@ -75,12 +115,12 @@ func CreateFunctionNotifyFunction(bot *irc.Connection, channelList map[string][]
 				log.Println(err)
 				return
 			}
-			var buf bytes.Buffer
 			err = pushTemplate.Execute(&buf, &pushEvent)
 
 			var channelNames = channelList[pushEvent.Project.Name]
 			if len(channelNames) == 0 {
 				log.Fatal("Project exists not in ChannelMapping")
+				log.Fatal(channelNames)
 				return
 			}
 
