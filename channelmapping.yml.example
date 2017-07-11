@@ -1,0 +1,6 @@
+---
+"Testprojectname":
+    - "#ThisIsMyIRCChannel"
+    - "#ThisIsAlsoMyIRCChannel"
+"SecondProject":
+    - "#AnotherIRCCHannel"
