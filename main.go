@@ -78,6 +78,10 @@ func CreateFunctionNotifyFunction(bot *irc.Connection, channelList map[string][]
 			err = pushTemplate.Execute(&buf, &pushEvent)
 
 			var channelNames = channelList[pushEvent.Project.Name]
+			if len(channelNames) == 0 {
+				log.Fatal("Project exists not in ChannelMapping")
+				return
+			}
 
 			sendMessage(buf.String(), channelNames, bot)
 
@@ -103,6 +107,7 @@ func CreateFunctionNotifyFunction(bot *irc.Connection, channelList map[string][]
 
 				if err != nil {
 					log.Printf("ERROR: %v", err)
+					return
 				}
 				sendMessage(buf.String(), channelNames, bot)
 
@@ -145,7 +150,16 @@ func main() {
 
 	channelList := make(map[string][]string)
 	yamlFile, err := ioutil.ReadFile("./channelmapping.yml")
+	if err != nil {
+		log.Fatal(err)
+		return
+	}
+
 	err = yaml.Unmarshal(yamlFile, channelList)
+	if err != nil {
+		log.Fatal(err)
+		return
+	}
 
 	RegisterHandlers(irccon, channelList)
 
