@@ -10,6 +10,7 @@ import (
 	"html/template"
 	"io/ioutil"
 	"log"
+	"strings"
 
 	"github.com/thoj/go-ircevent"
 
@@ -28,9 +29,9 @@ var (
 
 func CreateFunctionNotifyFunction(bot *irc.Connection, channelList map[string][]string) http.HandlerFunc {
 
-	const pushString = "[\x0311{{ .Project.Name }}\x03] {{ .UserName }} pushed {{ .TotalCommits }} new commits to \x0305{{ .Project.Branch }}\x03"
+	const pushString = "[\x0312{{ .Project.Name }}\x03] {{ .UserName }} pushed {{ .TotalCommits }} new commits to \x0305{{ .Branch }}\x03"
 	const commitString = "\x0315{{ .ShortID }}\x03 (\x0303+{{ .AddedFiles }}\x03|\x0308±{{ .ModifiedFiles }}\x03|\x0304-{{ .RemovedFiles }}\x03) - {{ .Message }}"
-	const issueString = "[\x0311{{ .Project.Name }}\x03] {{ .User.Name }} created issue \x0308#{{ .Issue.Id }}\x03: '{{ .Issue.Title }}'"
+	const issueString = "[\x0312{{ .Project.Name }}\x03] {{ .User.Name }} created issue \x0308#{{ .Issue.Iid }}\x03: '{{ .Issue.Title }}'"
 
 	pushTemplate, err := template.New("push notification").Parse(pushString)
 	if err != nil {
@@ -54,8 +55,7 @@ func CreateFunctionNotifyFunction(bot *irc.Connection, channelList map[string][]
 		var eventType = req.Header["X-Gitlab-Event"][0]
 
 		type Project struct {
-			Name   string `json:"name"`
-			Branch string `json:"default_branch"`
+			Name string `json:"name"`
 		}
 
 		type User struct {
@@ -63,7 +63,7 @@ func CreateFunctionNotifyFunction(bot *irc.Connection, channelList map[string][]
 		}
 
 		type Issue struct {
-			Id          int    `json:"id"`
+			Iid         int    `json:"iid"`
 			Title       string `json:"title"`
 			Description string `json:"description"`
 		}
@@ -81,6 +81,7 @@ func CreateFunctionNotifyFunction(bot *irc.Connection, channelList map[string][]
 			Project      Project  `json:"project"`
 			Commits      []Commit `json:"commits"`
 			TotalCommits int      `json:"total_commits_count"`
+			Branch       string   `json:"ref"`
 		}
 
 		type IssueEvent struct {
@@ -115,6 +116,7 @@ func CreateFunctionNotifyFunction(bot *irc.Connection, channelList map[string][]
 				log.Println(err)
 				return
 			}
+			pushEvent.Branch = strings.Split(pushEvent.Branch, "/")[2]
 			err = pushTemplate.Execute(&buf, &pushEvent)
 
 			var channelNames = channelList[pushEvent.Project.Name]
