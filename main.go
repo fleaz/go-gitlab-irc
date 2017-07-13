@@ -19,15 +19,21 @@ import (
 )
 
 var (
-	host           = flag.String("host", "irc.hackint.org", "Hostname of the IRC server")
-	port           = flag.Int("sslport", 6697, "SSL capable port of the IRC server")
-	nickname       = flag.String("nickname", "go-gitlab-irc", "Nickname to assume once connected")
-	channelmapping = flag.String("channelmapping", "channelmapping.yml", "Path to channel mapping file.")
-	gecos          = flag.String("gecos", "go-gitlab-irc", "Realname to assume once connected")
-	cafile         = flag.String("cafile", "hackint-rootca.crt", "Path to the ca file that verifies the server certificate.")
+	host        = flag.String("host", "irc.hackint.org", "Hostname of the IRC server")
+	port        = flag.Int("sslport", 6697, "SSL capable port of the IRC server")
+	nickname    = flag.String("nickname", "go-gitlab-irc", "Nickname to assume once connected")
+	mappingfile = flag.String("channelmapping", "channelmapping.yml", "Path to channel mapping file.")
+	gecos       = flag.String("gecos", "go-gitlab-irc", "Realname to assume once connected")
+	cafile      = flag.String("cafile", "hackint-rootca.crt", "Path to the ca file that verifies the server certificate.")
 )
 
-func CreateFunctionNotifyFunction(bot *irc.Connection, channelList map[string][]string) http.HandlerFunc {
+type Mapping struct {
+	DefaultChannel   string              `yaml:"default"`
+	GroupMappings    map[string][]string `yaml:"groups"`
+	ExplicitMappings map[string][]string `yaml:"explicit"`
+}
+
+func CreateFunctionNotifyFunction(bot *irc.Connection, channelMapping *Mapping) http.HandlerFunc {
 
 	const pushString = "[\x0312{{ .Project.Name }}\x03] {{ .UserName }} pushed {{ .TotalCommits }} new commits to \x0305{{ .Branch }}\x03"
 	const commitString = "\x0315{{ .ShortID }}\x03 (\x0303+{{ .AddedFiles }}\x03|\x0308±{{ .ModifiedFiles }}\x03|\x0304-{{ .RemovedFiles }}\x03) - {{ .Message }}"
@@ -55,7 +61,8 @@ func CreateFunctionNotifyFunction(bot *irc.Connection, channelList map[string][]
 		var eventType = req.Header["X-Gitlab-Event"][0]
 
 		type Project struct {
-			Name string `json:"name"`
+			Name      string `json:"name"`
+			Namespace string `json:"namespace"`
 		}
 
 		type User struct {
@@ -102,13 +109,7 @@ func CreateFunctionNotifyFunction(bot *irc.Connection, channelList map[string][]
 			}
 			err = issueTemplate.Execute(&buf, &issueEvent)
 
-			var channelNames = channelList[issueEvent.Project.Name]
-			if len(channelNames) == 0 {
-				log.Fatal("Project exists not in ChannelMapping")
-				return
-			}
-
-			sendMessage(buf.String(), channelNames, bot)
+			sendMessage(buf.String(), issueEvent.Project.Name, issueEvent.Project.Namespace, channelMapping, bot)
 
 		case "Push Hook":
 			var pushEvent PushEvent
@@ -119,14 +120,7 @@ func CreateFunctionNotifyFunction(bot *irc.Connection, channelList map[string][]
 			pushEvent.Branch = strings.Split(pushEvent.Branch, "/")[2]
 			err = pushTemplate.Execute(&buf, &pushEvent)
 
-			var channelNames = channelList[pushEvent.Project.Name]
-			if len(channelNames) == 0 {
-				log.Fatal("Project exists not in ChannelMapping")
-				log.Fatal(channelNames)
-				return
-			}
-
-			sendMessage(buf.String(), channelNames, bot)
+			sendMessage(buf.String(), pushEvent.Project.Name, pushEvent.Project.Namespace, channelMapping, bot)
 
 			for _, commit := range pushEvent.Commits {
 				type CommitContext struct {
@@ -152,7 +146,7 @@ func CreateFunctionNotifyFunction(bot *irc.Connection, channelList map[string][]
 					log.Printf("ERROR: %v", err)
 					return
 				}
-				sendMessage(buf.String(), channelNames, bot)
+				sendMessage(buf.String(), pushEvent.Project.Name, pushEvent.Project.Namespace, channelMapping, bot)
 
 			}
 
@@ -164,7 +158,50 @@ func CreateFunctionNotifyFunction(bot *irc.Connection, channelList map[string][]
 
 }
 
-func sendMessage(message string, channelNames []string, bot *irc.Connection) {
+func getAllChannelNames(channelMapping *Mapping) []string {
+	var allNames []string
+
+	// add default channel
+	allNames = append(allNames, channelMapping.DefaultChannel)
+	// add channels from group mappings
+	for _, channelList := range channelMapping.GroupMappings {
+		for _, channelName := range channelList {
+			allNames = append(allNames, channelName)
+		}
+	}
+	// add channels from explicit mappings
+	for _, channelList := range channelMapping.ExplicitMappings {
+		for _, channelName := range channelList {
+			allNames = append(allNames, channelName)
+		}
+	}
+	return allNames
+}
+
+func contains(mapping map[string][]string, entry string) bool {
+	for k, _ := range mapping {
+		if k == entry {
+			return true
+		}
+	}
+	return false
+}
+
+func sendMessage(message string, projectName string, namespace string, channelMapping *Mapping, bot *irc.Connection) {
+	var channelNames []string
+
+	if contains(channelMapping.ExplicitMappings, projectName) { // Check if explizit mapping exists
+		for _, channelName := range channelMapping.ExplicitMappings[projectName] {
+			channelNames = append(channelNames, channelName)
+		}
+	} else if contains(channelMapping.GroupMappings, namespace) { // Check if group mapping exists
+		for _, channelName := range channelMapping.GroupMappings[namespace] {
+			channelNames = append(channelNames, channelName)
+		}
+	} else { // Fall back to default channel
+		channelNames = append(channelNames, channelMapping.DefaultChannel)
+	}
+
 	for _, channelName := range channelNames {
 		bot.Privmsg(channelName, message)
 	}
@@ -191,20 +228,21 @@ func main() {
 	irccon.UseTLS = true
 	irccon.TLSConfig = tlsConfig
 
-	channelList := make(map[string][]string)
-	yamlFile, err := ioutil.ReadFile(*channelmapping)
+	channelMapping := new(Mapping)
+
+	yamlFile, err := ioutil.ReadFile(*mappingfile)
 	if err != nil {
 		log.Fatal(err)
 		return
 	}
 
-	err = yaml.Unmarshal(yamlFile, channelList)
+	err = yaml.Unmarshal(yamlFile, channelMapping)
 	if err != nil {
 		log.Fatal(err)
 		return
 	}
 
-	RegisterHandlers(irccon, channelList)
+	RegisterHandlers(irccon, channelMapping)
 
 	var server bytes.Buffer
 	server.WriteString(*host)
@@ -217,22 +255,21 @@ func main() {
 	}
 
 	go func() {
-		http.HandleFunc("/notify", CreateFunctionNotifyFunction(irccon, channelList))
+		http.HandleFunc("/notify", CreateFunctionNotifyFunction(irccon, channelMapping))
 		http.ListenAndServe("127.0.0.1:8084", nil)
 	}()
 
 	irccon.Loop()
 }
 
-func RegisterHandlers(irccon *irc.Connection, channelList map[string][]string) {
+func RegisterHandlers(irccon *irc.Connection, channelMapping *Mapping) {
 	irccon.AddCallback("001", func(e *irc.Event) {
-		for _, channelNames := range channelList {
-			for _, channel := range channelNames {
-				log.Printf("Joining %v", channel)
-				irccon.Join(channel)
-			}
-
+		var channelNames = getAllChannelNames(channelMapping)
+		for _, channelName := range channelNames {
+			log.Printf("Joining %v", channelName)
+			irccon.Join(channelName)
 		}
+
 	})
 	irccon.AddCallback("366", func(e *irc.Event) {})
 }

@@ -1,6 +1,9 @@
 ---
-"Testprojectname":
-    - "#ThisIsMyIRCChannel"
-    - "#ThisIsAlsoMyIRCChannel"
-"SecondProject":
-    - "#AnotherIRCCHannel"
+default: "#fleaz-default"
+groups:
+  "myGitlabGroup":
+    - "#fleaz-group"
+explicit:
+  "mySpecialGitlabProject":
+    - "#fleaz"
+
