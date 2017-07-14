@@ -1,3 +1,6 @@
+# Acknowledgment
+Thanks to @andir for the original codebase: https://github.com/andir/go-prom-irc
+
 # go-gitlab-irc
 
 Implements GitLab API and pipe output into the configured IRC channels.
@@ -6,7 +9,7 @@ Implements GitLab API and pipe output into the configured IRC channels.
 
   `go get github.com/f-breidenstein/go-gitlab-irc`
   
-  `go-gitlab-irc -host irc.hackint.org -sslport 6697 -nickname my-go-gitlab-irc-bot -cafile hackint-rootca.crt`
+  `go-gitlab-irc -host irc.hackint.org -sslport 6697 -nickname my-go-gitlab-irc-bot -cafile hackint-rootca.crt` -channelmapping channelmapping.yml
   
 # Configuration
   ```
