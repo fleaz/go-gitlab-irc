@@ -104,7 +104,7 @@ func CreateFunctionNotifyFunction(bot *irc.Connection, channelMapping *Mapping) 
 		case "Issue Hook":
 			var issueEvent IssueEvent
 			if err := decoder.Decode(&issueEvent); err != nil {
-				log.Println(err)
+				log.Fatal(err)
 				return
 			}
 			err = issueTemplate.Execute(&buf, &issueEvent)
@@ -189,9 +189,10 @@ func contains(mapping map[string][]string, entry string) bool {
 
 func sendMessage(message string, projectName string, namespace string, channelMapping *Mapping, bot *irc.Connection) {
 	var channelNames []string
+	var full_projectName = namespace + "/" + projectName
 
-	if contains(channelMapping.ExplicitMappings, projectName) { // Check if explizit mapping exists
-		for _, channelName := range channelMapping.ExplicitMappings[projectName] {
+	if contains(channelMapping.ExplicitMappings, full_projectName) { // Check if explizit mapping exists
+		for _, channelName := range channelMapping.ExplicitMappings[full_projectName] {
 			channelNames = append(channelNames, channelName)
 		}
 	} else if contains(channelMapping.GroupMappings, namespace) { // Check if group mapping exists

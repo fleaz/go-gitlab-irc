@@ -1,9 +1,11 @@
 ---
 default: "#fleaz-default"
+
 groups:
   "myGitlabGroup":
     - "#fleaz-group"
+
 explicit:
-  "mySpecialGitlabProject":
+  "myGitlabGroup/mySpecialGitlabProject":
     - "#fleaz"
 
