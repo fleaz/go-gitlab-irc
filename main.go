@@ -72,6 +72,7 @@ func CreateFunctionNotifyFunction(bot *irc.Connection, channelMapping *Mapping) 
 
 		type Issue struct {
 			Iid         int    `json:"iid"`
+			State       string `json:"state"`
 			Title       string `json:"title"`
 			Description string `json:"description"`
 			URL         string `json:"url"`
