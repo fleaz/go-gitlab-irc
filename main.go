@@ -78,9 +78,9 @@ func CreateFunctionNotifyFunction(bot *irc.Connection, channelMapping *Mapping) 
 		type Commit struct {
 			Id       string   `json:"id"`
 			Message  string   `json:"message"`
-			Added    []string `"json:"added"`
-			Modified []string `"json:"modified"`
-			Removed  []string `"json:"removed"`
+			Added    []string `json:"added"`
+			Modified []string `json:"modified"`
+			Removed  []string `json:"removed"`
 		}
 
 		type PushEvent struct {
