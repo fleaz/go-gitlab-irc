@@ -37,7 +37,13 @@ func CreateFunctionNotifyFunction(bot *irc.Connection, channelMapping *Mapping) 
 
 	const pushString = "[\x0312{{ .Project.Name }}\x03] {{ .UserName }} pushed {{ .TotalCommits }} new commits to \x0305{{ .Branch }}\x03 ({{ .Project.WebURL }}/compare/{{ .BeforeCommit }}...{{ .AfterCommit }})"
 	const commitString = "\x0315{{ .ShortID }}\x03 (\x0303+{{ .AddedFiles }}\x03|\x0308±{{ .ModifiedFiles }}\x03|\x0304-{{ .RemovedFiles }}\x03) \x0306{{ .Author.Name }}\x03: {{ .Message }}"
-	const issueString = "[\x0312{{ .Project.Name }}\x03] {{ .User.Name }} {{ .Issue.State }} issue \x0308#{{ .Issue.Iid }}\x03: '{{ .Issue.Title }}' ({{ .Issue.URL }})"
+	const issueString = "[\x0312{{ .Project.Name }}\x03] {{ .User.Name }} {{ .Issue.Action }} issue \x0308#{{ .Issue.Iid }}\x03: '{{ .Issue.Title }}' ({{ .Issue.URL }})"
+
+	issueActions := map[string]string{
+		"open":   "opened",
+		"update": "updated",
+		"close":  "closed",
+	}
 
 	pushTemplate, err := template.New("push notification").Parse(pushString)
 	if err != nil {
@@ -72,7 +78,7 @@ func CreateFunctionNotifyFunction(bot *irc.Connection, channelMapping *Mapping) 
 
 		type Issue struct {
 			Iid         int    `json:"iid"`
-			State       string `json:"state"`
+			Action      string `json:"action"`
 			Title       string `json:"title"`
 			Description string `json:"description"`
 			URL         string `json:"url"`
@@ -117,6 +123,9 @@ func CreateFunctionNotifyFunction(bot *irc.Connection, channelMapping *Mapping) 
 				log.Fatal(err)
 				return
 			}
+
+			issueEvent.Issue.Action = issueActions[issueEvent.Issue.Action]
+
 			err = issueTemplate.Execute(&buf, &issueEvent)
 
 			sendMessage(buf.String(), issueEvent.Project.Name, issueEvent.Project.Namespace, channelMapping, bot)
