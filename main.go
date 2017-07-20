@@ -122,8 +122,8 @@ func CreateFunctionNotifyFunction(bot *irc.Connection, channelMapping *Mapping) 
 			}
 
 			pushEvent.Branch = strings.Split(pushEvent.Branch, "/")[2]
-			pushEvent.BeforeCommit = pushEvent.BeforeCommit[0:8]
-			pushEvent.AfterCommit = pushEvent.AfterCommit[0:8]
+			pushEvent.BeforeCommit = pushEvent.BeforeCommit[0:7]
+			pushEvent.AfterCommit = pushEvent.AfterCommit[0:7]
 
 			err = pushTemplate.Execute(&buf, &pushEvent)
 
@@ -139,7 +139,7 @@ func CreateFunctionNotifyFunction(bot *irc.Connection, channelMapping *Mapping) 
 				}
 
 				context := CommitContext{
-					ShortID:       commit.Id[0:8],
+					ShortID:       commit.Id[0:7],
 					Message:       commit.Message,
 					AddedFiles:    len(commit.Added),
 					ModifiedFiles: len(commit.Modified),
