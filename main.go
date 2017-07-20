@@ -43,6 +43,7 @@ func CreateFunctionNotifyFunction(bot *irc.Connection, channelMapping *Mapping) 
 		"open":   "opened",
 		"update": "updated",
 		"close":  "closed",
+		"reopen": "reopened",
 	}
 
 	pushTemplate, err := template.New("push notification").Parse(pushString)
