@@ -36,8 +36,8 @@ type Mapping struct {
 func CreateFunctionNotifyFunction(bot *irc.Connection, channelMapping *Mapping) http.HandlerFunc {
 
 	const pushString = "[\x0312{{ .Project.Name }}\x03] {{ .UserName }} pushed {{ .TotalCommits }} new commits to \x0305{{ .Branch }}\x03 ({{ .Project.WebURL }}/compare/{{ .BeforeCommit }}...{{ .AfterCommit }})"
-	const commitString = "\x0315{{ .ShortID }}\x03 (\x0303+{{ .AddedFiles }}\x03|\x0308±{{ .ModifiedFiles }}\x03|\x0304-{{ .RemovedFiles }}\x03) - {{ .Message }}"
-	const issueString = "[\x0312{{ .Project.Name }}\x03] {{ .User.Name }} {{ .Issue.state }} issue \x0308#{{ .Issue.Iid }}\x03: '{{ .Issue.Title }}' ({{ .Issue.URL }})"
+	const commitString = "\x0315{{ .ShortID }}\x03 (\x0303+{{ .AddedFiles }}\x03|\x0308±{{ .ModifiedFiles }}\x03|\x0304-{{ .RemovedFiles }}\x03) \x0306{{ .Author.Name }}\x03: {{ .Message }}"
+	const issueString = "[\x0312{{ .Project.Name }}\x03] {{ .User.Name }} {{ .Issue.State }} issue \x0308#{{ .Issue.Iid }}\x03: '{{ .Issue.Title }}' ({{ .Issue.URL }})"
 
 	pushTemplate, err := template.New("push notification").Parse(pushString)
 	if err != nil {
@@ -77,12 +77,17 @@ func CreateFunctionNotifyFunction(bot *irc.Connection, channelMapping *Mapping) 
 			URL         string `json:"url"`
 		}
 
+		type Author struct {
+			Name string `json:"name"`
+		}
+
 		type Commit struct {
 			Id       string   `json:"id"`
 			Message  string   `json:"message"`
 			Added    []string `json:"added"`
 			Modified []string `json:"modified"`
 			Removed  []string `json:"removed"`
+			Author   Author   `json:"author"`
 		}
 
 		type PushEvent struct {
@@ -134,6 +139,7 @@ func CreateFunctionNotifyFunction(bot *irc.Connection, channelMapping *Mapping) 
 				type CommitContext struct {
 					ShortID       string
 					Message       string
+					Author        Author
 					AddedFiles    int
 					ModifiedFiles int
 					RemovedFiles  int
@@ -142,6 +148,7 @@ func CreateFunctionNotifyFunction(bot *irc.Connection, channelMapping *Mapping) 
 				context := CommitContext{
 					ShortID:       commit.Id[0:7],
 					Message:       commit.Message,
+					Author:        commit.Author,
 					AddedFiles:    len(commit.Added),
 					ModifiedFiles: len(commit.Modified),
 					RemovedFiles:  len(commit.Removed),
