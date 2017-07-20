@@ -35,7 +35,7 @@ type Mapping struct {
 
 func CreateFunctionNotifyFunction(bot *irc.Connection, channelMapping *Mapping) http.HandlerFunc {
 
-	const pushString = "[\x0312{{ .Project.Name }}\x03] {{ .UserName }} pushed {{ .TotalCommits }} new commits to \x0305{{ .Branch }}\x03"
+	const pushString = "[\x0312{{ .Project.Name }}\x03] {{ .UserName }} pushed {{ .TotalCommits }} new commits to \x0305{{ .Branch }}\x03 ({{ .Project.WebURL }}/compare/{{ .BeforeCommit }}...{{ .AfterCommit }})"
 	const commitString = "\x0315{{ .ShortID }}\x03 (\x0303+{{ .AddedFiles }}\x03|\x0308±{{ .ModifiedFiles }}\x03|\x0304-{{ .RemovedFiles }}\x03) - {{ .Message }}"
 	const issueString = "[\x0312{{ .Project.Name }}\x03] {{ .User.Name }} created issue \x0308#{{ .Issue.Iid }}\x03: '{{ .Issue.Title }}'"
 
@@ -63,6 +63,7 @@ func CreateFunctionNotifyFunction(bot *irc.Connection, channelMapping *Mapping) 
 		type Project struct {
 			Name      string `json:"name"`
 			Namespace string `json:"namespace"`
+			WebURL    string `json:"web_url"`
 		}
 
 		type User struct {
@@ -85,6 +86,8 @@ func CreateFunctionNotifyFunction(bot *irc.Connection, channelMapping *Mapping) 
 
 		type PushEvent struct {
 			UserName     string   `json:"user_name"`
+			BeforeCommit string   `json:"before"`
+			AfterCommit  string   `json:"after"`
 			Project      Project  `json:"project"`
 			Commits      []Commit `json:"commits"`
 			TotalCommits int      `json:"total_commits_count"`
@@ -117,7 +120,11 @@ func CreateFunctionNotifyFunction(bot *irc.Connection, channelMapping *Mapping) 
 				log.Println(err)
 				return
 			}
+
 			pushEvent.Branch = strings.Split(pushEvent.Branch, "/")[2]
+			pushEvent.BeforeCommit = pushEvent.BeforeCommit[0:8]
+			pushEvent.AfterCommit = pushEvent.AfterCommit[0:8]
+
 			err = pushTemplate.Execute(&buf, &pushEvent)
 
 			sendMessage(buf.String(), pushEvent.Project.Name, pushEvent.Project.Namespace, channelMapping, bot)
