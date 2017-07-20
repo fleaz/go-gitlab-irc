@@ -37,7 +37,7 @@ func CreateFunctionNotifyFunction(bot *irc.Connection, channelMapping *Mapping) 
 
 	const pushString = "[\x0312{{ .Project.Name }}\x03] {{ .UserName }} pushed {{ .TotalCommits }} new commits to \x0305{{ .Branch }}\x03 ({{ .Project.WebURL }}/compare/{{ .BeforeCommit }}...{{ .AfterCommit }})"
 	const commitString = "\x0315{{ .ShortID }}\x03 (\x0303+{{ .AddedFiles }}\x03|\x0308±{{ .ModifiedFiles }}\x03|\x0304-{{ .RemovedFiles }}\x03) - {{ .Message }}"
-	const issueString = "[\x0312{{ .Project.Name }}\x03] {{ .User.Name }} created issue \x0308#{{ .Issue.Iid }}\x03: '{{ .Issue.Title }}'"
+	const issueString = "[\x0312{{ .Project.Name }}\x03] {{ .User.Name }} created issue \x0308#{{ .Issue.Iid }}\x03: '{{ .Issue.Title }}' ({{ .Issue.URL }})"
 
 	pushTemplate, err := template.New("push notification").Parse(pushString)
 	if err != nil {
@@ -74,6 +74,7 @@ func CreateFunctionNotifyFunction(bot *irc.Connection, channelMapping *Mapping) 
 			Iid         int    `json:"iid"`
 			Title       string `json:"title"`
 			Description string `json:"description"`
+			URL         string `json:"url"`
 		}
 
 		type Commit struct {
