@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"flag"
 	"gopkg.in/yaml.v2"
+	"html"
 	"html/template"
 	"io/ioutil"
 	"log"
@@ -158,7 +159,7 @@ func CreateFunctionNotifyFunction(bot *irc.Connection, channelMapping *Mapping) 
 
 				context := CommitContext{
 					ShortID:       commit.Id[0:7],
-					Message:       commit.Message,
+					Message:       html.UnescapeString(commit.Message),
 					Author:        commit.Author,
 					AddedFiles:    len(commit.Added),
 					ModifiedFiles: len(commit.Modified),
