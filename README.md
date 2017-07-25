@@ -32,5 +32,5 @@ go-gitlab-irc only supports connecting to IRC via SSL so far. Make sure you prov
 
 # Webhook Set-Up
 
-By default, the bot will listen on localhost at port 8084. use the following URL
-to add it to your webhooks: `http://127.0.0.1:8084/notify`
+By default, the bot will listen on localhost at port 8084. Use the following URL
+to add it to your webhooks in gitlab: `http://127.0.0.1:8084/notify`
