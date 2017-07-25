@@ -9,8 +9,8 @@ Implements GitLab API and pipe output into the configured IRC channels.
 
   `go get github.com/f-breidenstein/go-gitlab-irc`
   
-  `go-gitlab-irc -host irc.hackint.org -sslport 6697 -nickname my-go-gitlab-irc-bot -cafile hackint-rootca.crt` -channelmapping channelmapping.yml
-  
+  `go-gitlab-irc -host irc.hackint.org -sslport 6697 -nickname my-go-gitlab-irc-bot -cafile hackint-rootca.crt -channelmapping channelmapping.yml`
+
 # Configuration
   ```
  Usage of ./go-rom-irc:
@@ -29,3 +29,8 @@ Implements GitLab API and pipe output into the configured IRC channels.
 ```
 
 go-gitlab-irc only supports connecting to IRC via SSL so far. Make sure you provide the proper `-cafile` option for your network.
+
+# Webhook Set-Up
+
+By default, the bot will listen on localhost at port 8084. Use the following URL
+to add it to your webhooks in gitlab: `http://127.0.0.1:8084/notify`
