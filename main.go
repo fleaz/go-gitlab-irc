@@ -39,8 +39,9 @@ func CreateFunctionNotifyFunction(bot *irc.Connection, channelMapping *Mapping) 
 	const pushString = "[\x0312{{ .Project.Name }}\x03] {{ .UserName }} pushed {{ .TotalCommits }} new commits to \x0305{{ .Branch }}\x03 ({{ .Project.WebURL }}/compare/{{ .BeforeCommit }}...{{ .AfterCommit }})"
 	const commitString = "\x0315{{ .ShortID }}\x03 (\x0303+{{ .AddedFiles }}\x03|\x0308±{{ .ModifiedFiles }}\x03|\x0304-{{ .RemovedFiles }}\x03) \x0306{{ .Author.Name }}\x03: {{ .Message }}"
 	const issueString = "[\x0312{{ .Project.Name }}\x03] {{ .User.Name }} {{ .Issue.Action }} issue \x0308#{{ .Issue.Iid }}\x03: {{ .Issue.Title }} ({{ .Issue.URL }})"
+	const mergeString = "[\x0312{{ .Project.Name }}\x03] {{ .User.Name }} {{ .Merge.Action }} merge request \x0308#{{ .Merge.Iid }}\x03: {{ .Merge.Title }} ({{ .Merge.URL }})"
 
-	issueActions := map[string]string{
+	HookActions := map[string]string{
 		"open":   "opened",
 		"update": "updated",
 		"close":  "closed",
@@ -60,6 +61,11 @@ func CreateFunctionNotifyFunction(bot *irc.Connection, channelMapping *Mapping) 
 	issueTemplate, err := template.New("issue notification").Parse(issueString)
 	if err != nil {
 		log.Fatalf("Failed to parse issueEvent template: %v", err)
+	}
+
+	mergeTemplate, err := template.New("merge notification").Parse(mergeString)
+	if err != nil {
+		log.Fatalf("Failed to parse mergeEvent template: %v", err)
 	}
 
 	return func(wr http.ResponseWriter, req *http.Request) {
@@ -115,9 +121,35 @@ func CreateFunctionNotifyFunction(bot *irc.Connection, channelMapping *Mapping) 
 			Issue   Issue   `json:"object_attributes"`
 		}
 
+		type Merge struct {
+			Iid    int    `json:"iid"`
+			Action string `json:"action"`
+			Title  string `json:"title"`
+			URL    string `json:"url"`
+		}
+
+		type MergeEvent struct {
+			User    User    `json:"user"`
+			Project Project `json:"project"`
+			Merge   Merge   `json:"object_attributes"`
+		}
+
 		var buf bytes.Buffer
 
 		switch eventType {
+
+		case "Merge Request Hook":
+			var mergeEvent MergeEvent
+			if err := decoder.Decode(&mergeEvent); err != nil {
+				log.Fatal(err)
+				return
+			}
+
+			mergeEvent.Merge.Action = HookActions[mergeEvent.Merge.Action]
+
+			err = mergeTemplate.Execute(&buf, &mergeEvent)
+
+			sendMessage(buf.String(), mergeEvent.Project.Name, mergeEvent.Project.Namespace, channelMapping, bot)
 
 		case "Issue Hook":
 			var issueEvent IssueEvent
@@ -126,7 +158,7 @@ func CreateFunctionNotifyFunction(bot *irc.Connection, channelMapping *Mapping) 
 				return
 			}
 
-			issueEvent.Issue.Action = issueActions[issueEvent.Issue.Action]
+			issueEvent.Issue.Action = HookActions[issueEvent.Issue.Action]
 
 			err = issueTemplate.Execute(&buf, &issueEvent)
 
