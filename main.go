@@ -6,6 +6,7 @@ import (
 	"crypto/x509"
 	"encoding/json"
 	"flag"
+	"fmt"
 	"gopkg.in/yaml.v2"
 	"html"
 	"html/template"
@@ -179,6 +180,9 @@ func CreateFunctionNotifyFunction(bot *irc.Connection, channelMapping *Mapping) 
 
 			sendMessage(buf.String(), pushEvent.Project.Name, pushEvent.Project.Namespace, channelMapping, bot)
 
+			// Limit number of commit meessages to 3
+			pushEvent.Commits = pushEvent.Commits[0:3]
+
 			for _, commit := range pushEvent.Commits {
 				type CommitContext struct {
 					ShortID       string
@@ -207,6 +211,12 @@ func CreateFunctionNotifyFunction(bot *irc.Connection, channelMapping *Mapping) 
 				}
 				sendMessage(buf.String(), pushEvent.Project.Name, pushEvent.Project.Namespace, channelMapping, bot)
 
+			}
+
+			if pushEvent.TotalCommits > 3 {
+				var message = fmt.Sprintf("and %d more commits.", pushEvent.TotalCommits)
+
+				sendMessage(message, pushEvent.Project.Name, pushEvent.Project.Namespace, channelMapping, bot)
 			}
 
 		default:
