@@ -181,7 +181,9 @@ func CreateFunctionNotifyFunction(bot *irc.Connection, channelMapping *Mapping) 
 			sendMessage(buf.String(), pushEvent.Project.Name, pushEvent.Project.Namespace, channelMapping, bot)
 
 			// Limit number of commit meessages to 3
-			pushEvent.Commits = pushEvent.Commits[0:3]
+			if pushEvent.TotalCommits > 3 {
+				pushEvent.Commits = pushEvent.Commits[0:3]
+			}
 
 			for _, commit := range pushEvent.Commits {
 				type CommitContext struct {
