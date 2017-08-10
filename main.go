@@ -328,7 +328,7 @@ func main() {
 
 	go func() {
 		http.HandleFunc("/notify", CreateFunctionNotifyFunction(irccon, channelMapping))
-		http.ListenAndServe("127.0.0.1:8084", nil)
+		http.ListenAndServe(":8084", nil)
 	}()
 
 	irccon.Loop()
