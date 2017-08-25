@@ -139,8 +139,8 @@ func CreateFunctionNotifyFunction(bot *irc.Connection, channelMapping *Mapping) 
 
 		switch eventType {
 
-		case "Merge Request Hook":
-		case "Merge Request Event":
+		case "Merge Request Hook", "Merge Request Event":
+			log.Printf("Got Hook for a Merge Request")
 			var mergeEvent MergeEvent
 			if err := decoder.Decode(&mergeEvent); err != nil {
 				log.Fatal(err)
@@ -153,8 +153,8 @@ func CreateFunctionNotifyFunction(bot *irc.Connection, channelMapping *Mapping) 
 
 			sendMessage(buf.String(), mergeEvent.Project.Name, mergeEvent.Project.Namespace, channelMapping, bot)
 
-		case "Issue Hook":
-		case "Issue Event":
+		case "Issue Hook", "Issue Event":
+			log.Printf("Got Hook for an Issue")
 			var issueEvent IssueEvent
 			if err := decoder.Decode(&issueEvent); err != nil {
 				log.Fatal(err)
@@ -167,8 +167,8 @@ func CreateFunctionNotifyFunction(bot *irc.Connection, channelMapping *Mapping) 
 
 			sendMessage(buf.String(), issueEvent.Project.Name, issueEvent.Project.Namespace, channelMapping, bot)
 
-		case "Push Hook":
-		case "Push Event":
+		case "Push Hook", "Push Event":
+			log.Printf("Got Hook for a Push Event")
 			var pushEvent PushEvent
 			if err := decoder.Decode(&pushEvent); err != nil {
 				log.Println(err)
