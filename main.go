@@ -47,6 +47,7 @@ func CreateFunctionNotifyFunction(bot *irc.Connection, channelMapping *Mapping) 
 		"update": "updated",
 		"close":  "closed",
 		"reopen": "reopened",
+		"merge":  "merged",
 	}
 
 	pushTemplate, err := template.New("push notification").Parse(pushString)
