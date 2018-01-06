@@ -219,7 +219,7 @@ func CreateFunctionNotifyFunction(bot *irc.Connection, channelMapping *Mapping) 
 			}
 
 			if pushEvent.TotalCommits > 3 {
-				var message = fmt.Sprintf("and %d more commits.", pushEvent.TotalCommits)
+				var message = fmt.Sprintf("and %d more commits.", pushEvent.TotalCommits-3)
 
 				sendMessage(message, pushEvent.Project.Name, pushEvent.Project.Namespace, channelMapping, bot)
 			}
