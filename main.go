@@ -45,11 +45,14 @@ func CreateFunctionNotifyFunction(bot *irc.Connection, channelMapping *Mapping) 
 	const issueString = "[\x0312{{ .Project.Name }}\x03] {{ .User.Name }} {{ .Issue.Action }} issue \x0308#{{ .Issue.Iid }}\x03: {{ .Issue.Title }} {{ .Issue.URL }}"
 	const mergeString = "[\x0312{{ .Project.Name }}\x03] {{ .User.Name }} {{ .Merge.Action }} merge request \x0308#{{ .Merge.Iid }}\x03: {{ .Merge.Title }} {{ .Merge.URL }}"
 	const pipelineString = "[\x0312{{ .Project.Name }}\x03] Pipeline for commit {{ .Pipeline.Commit }} {{ .Pipeline.Status }} in {{ .Pipeline.Duration }} seconds {{ .Project.WebURL }}/pipelines/{{ .Pipeline.Id }}"
-	const jobString = "[\x0312{{ .Repository.Name }}\x03] Job \x0308{{ .Name }}\x03 for commit {{ .Commit }} {{ .Status }} in {{ .Duration }} seconds {{ .Repository.Homepage }}/-/jobs/{{ .Id }}"
+	const jobRunningString = "[\x0312{{ .Repository.Name }}\x03] Job \x0308{{ .Name }}\x03 for commit {{ .Commit }} {{ .Status }} {{ .Repository.Homepage }}/-/jobs/{{ .Id }}"
+	const jobCompleteString = "[\x0312{{ .Repository.Name }}\x03] Job \x0308{{ .Name }}\x03 for commit {{ .Commit }} {{ .Status }} in {{ .Duration }} seconds {{ .Repository.Homepage }}/-/jobs/{{ .Id }}"
 
 	JobStatus := map[string]string{
-		"failed":  "\x0304failed\x03",
-		"success": "\x0303succeded\x03",
+		"created": "\x0315created\x03",
+		"running": "is \x0307running\x03",
+		"failed":  "has \x0304failed\x03",
+		"success": "has \x0303succeded\x03",
 	}
 
 	HookActions := map[string]string{
@@ -102,9 +105,14 @@ func CreateFunctionNotifyFunction(bot *irc.Connection, channelMapping *Mapping) 
 		log.Fatalf("Failed to parse pipelineEvent template: %v", err)
 	}
 
-	jobTemplate, err := template.New("job notification").Parse(jobString)
+	jobRunningTemplate, err := template.New("job running notification").Parse(jobRunningString)
 	if err != nil {
-		log.Fatalf("Failed to parse jobEvent template: %v", err)
+		log.Fatalf("Failed to parse jobRunningEvent template: %v", err)
+	}
+
+	jobCompleteTemplate, err := template.New("job complete notification").Parse(jobCompleteString)
+	if err != nil {
+		log.Fatalf("Failed to parse jobCompleteEvent template: %v", err)
 	}
 
 	return func(wr http.ResponseWriter, req *http.Request) {
@@ -230,16 +238,23 @@ func CreateFunctionNotifyFunction(bot *irc.Connection, channelMapping *Mapping) 
 				return
 			}
 
-			// colorize status
-			jobEvent.Status = JobStatus[jobEvent.Status]
-
 			// shorten commit id
 			jobEvent.Commit = jobEvent.Commit[0:7]
 
 			// parse namespace from Git URL
 			namespace := strings.Split(strings.Split(jobEvent.Repository.URL, ":")[1], "/")[0]
 
-			err = jobTemplate.Execute(&buf, &jobEvent)
+			if jobEvent.Status == "created" || jobEvent.Status == "running" {
+				// colorize status
+				jobEvent.Status = JobStatus[jobEvent.Status]
+
+				err = jobRunningTemplate.Execute(&buf, &jobEvent)
+			} else {
+				// colorize status
+				jobEvent.Status = JobStatus[jobEvent.Status]
+
+				err = jobCompleteTemplate.Execute(&buf, &jobEvent)
+			}
 
 			sendMessage(buf.String(), jobEvent.Repository.Name, namespace, channelMapping, bot)
 
