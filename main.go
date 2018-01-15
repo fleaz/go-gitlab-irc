@@ -37,10 +37,13 @@ type Mapping struct {
 
 func CreateFunctionNotifyFunction(bot *irc.Connection, channelMapping *Mapping) http.HandlerFunc {
 
-	const pushString = "[\x0312{{ .Project.Name }}\x03] {{ .UserName }} pushed {{ .TotalCommits }} new commits to \x0305{{ .Branch }}\x03 ({{ .Project.WebURL }}/compare/{{ .BeforeCommit }}...{{ .AfterCommit }})"
+	const pushCompareString = "[\x0312{{ .Project.Name }}\x03] {{ .UserName }} pushed {{ .TotalCommits }} commits to \x0305{{ .Branch }}\x03 {{ .Project.WebURL }}/compare/{{ .BeforeCommit }}...{{ .AfterCommit }}"
+	const pushCommitLogString = "[\x0312{{ .Project.Name }}\x03] {{ .UserName }} pushed {{ .TotalCommits }} commits to \x0305{{ .Branch }}\x03 {{ .Project.WebURL }}/commits/{{ .Branch }}"
+	const branchCreateString = "[\x0312{{ .Project.Name }}\x03] {{ .UserName }} created the branch \x0305{{ .Branch }}\x03"
+	const branchDeleteString = "[\x0312{{ .Project.Name }}\x03] {{ .UserName }} deleted the branch \x0305{{ .Branch }}\x03"
 	const commitString = "\x0315{{ .ShortID }}\x03 (\x0303+{{ .AddedFiles }}\x03|\x0308±{{ .ModifiedFiles }}\x03|\x0304-{{ .RemovedFiles }}\x03) \x0306{{ .Author.Name }}\x03: {{ .Message }}"
-	const issueString = "[\x0312{{ .Project.Name }}\x03] {{ .User.Name }} {{ .Issue.Action }} issue \x0308#{{ .Issue.Iid }}\x03: {{ .Issue.Title }} ({{ .Issue.URL }})"
-	const mergeString = "[\x0312{{ .Project.Name }}\x03] {{ .User.Name }} {{ .Merge.Action }} merge request \x0308#{{ .Merge.Iid }}\x03: {{ .Merge.Title }} ({{ .Merge.URL }})"
+	const issueString = "[\x0312{{ .Project.Name }}\x03] {{ .User.Name }} {{ .Issue.Action }} issue \x0308#{{ .Issue.Iid }}\x03: {{ .Issue.Title }} {{ .Issue.URL }}"
+	const mergeString = "[\x0312{{ .Project.Name }}\x03] {{ .User.Name }} {{ .Merge.Action }} merge request \x0308#{{ .Merge.Iid }}\x03: {{ .Merge.Title }} {{ .Merge.URL }}"
 
 	HookActions := map[string]string{
 		"open":   "opened",
@@ -50,9 +53,26 @@ func CreateFunctionNotifyFunction(bot *irc.Connection, channelMapping *Mapping) 
 		"merge":  "merged",
 	}
 
-	pushTemplate, err := template.New("push notification").Parse(pushString)
+	const NullCommit = "0000000000000000000000000000000000000000"
+
+	pushCompareTemplate, err := template.New("push notification").Parse(pushCompareString)
 	if err != nil {
-		log.Fatalf("Failed to parse pushEvent template: %v", err)
+		log.Fatalf("Failed to parse pushCompare template: %v", err)
+	}
+
+	pushCommitLogTemplate, err := template.New("push to new branch notification").Parse(pushCommitLogString)
+	if err != nil {
+		log.Fatalf("Failed to parse pushCommitLog template: %v", err)
+	}
+
+	branchCreateTemplate, err := template.New("branch creat notification").Parse(branchCreateString)
+	if err != nil {
+		log.Fatalf("Failed to parse branchDelete template: %v", err)
+	}
+
+	branchDeleteTemplate, err := template.New("branch delete notification").Parse(branchDeleteString)
+	if err != nil {
+		log.Fatalf("Failed to parse branchDelete template: %v", err)
 	}
 
 	commitTemplate, err := template.New("commit notification").Parse(commitString)
@@ -177,52 +197,72 @@ func CreateFunctionNotifyFunction(bot *irc.Connection, channelMapping *Mapping) 
 			}
 
 			pushEvent.Branch = strings.Split(pushEvent.Branch, "/")[2]
-			pushEvent.BeforeCommit = pushEvent.BeforeCommit[0:7]
-			pushEvent.AfterCommit = pushEvent.AfterCommit[0:7]
 
-			err = pushTemplate.Execute(&buf, &pushEvent)
-
-			sendMessage(buf.String(), pushEvent.Project.Name, pushEvent.Project.Namespace, channelMapping, bot)
-
-			// Limit number of commit meessages to 3
-			if pushEvent.TotalCommits > 3 {
-				pushEvent.Commits = pushEvent.Commits[0:3]
-			}
-
-			for _, commit := range pushEvent.Commits {
-				type CommitContext struct {
-					ShortID       string
-					Message       string
-					Author        Author
-					AddedFiles    int
-					ModifiedFiles int
-					RemovedFiles  int
-				}
-
-				context := CommitContext{
-					ShortID:       commit.Id[0:7],
-					Message:       html.UnescapeString(commit.Message),
-					Author:        commit.Author,
-					AddedFiles:    len(commit.Added),
-					ModifiedFiles: len(commit.Modified),
-					RemovedFiles:  len(commit.Removed),
-				}
-
+			if pushEvent.AfterCommit == NullCommit {
+				// Branch was deleted
 				var buf bytes.Buffer
-				err = commitTemplate.Execute(&buf, &context)
-
-				if err != nil {
-					log.Printf("ERROR: %v", err)
-					return
-				}
+				err = branchDeleteTemplate.Execute(&buf, &pushEvent)
 				sendMessage(buf.String(), pushEvent.Project.Name, pushEvent.Project.Namespace, channelMapping, bot)
+			} else {
+				if pushEvent.BeforeCommit == NullCommit {
+					// Branch was created
+					var buf bytes.Buffer
+					err = branchCreateTemplate.Execute(&buf, &pushEvent)
+					sendMessage(buf.String(), pushEvent.Project.Name, pushEvent.Project.Namespace, channelMapping, bot)
+				}
 
-			}
+				if pushEvent.TotalCommits > 0 {
+					// when the beforeCommit does not exist, we can't link to a compare without skipping the first commit
+					var buf bytes.Buffer
+					if pushEvent.BeforeCommit == NullCommit {
+						err = pushCommitLogTemplate.Execute(&buf, &pushEvent)
+					} else {
+						pushEvent.BeforeCommit = pushEvent.BeforeCommit[0:7]
+						pushEvent.AfterCommit = pushEvent.AfterCommit[0:7]
+						err = pushCompareTemplate.Execute(&buf, &pushEvent)
+					}
 
-			if pushEvent.TotalCommits > 3 {
-				var message = fmt.Sprintf("and %d more commits.", pushEvent.TotalCommits-3)
+					sendMessage(buf.String(), pushEvent.Project.Name, pushEvent.Project.Namespace, channelMapping, bot)
 
-				sendMessage(message, pushEvent.Project.Name, pushEvent.Project.Namespace, channelMapping, bot)
+					// Limit number of commit meessages to 3
+					if pushEvent.TotalCommits > 3 {
+						pushEvent.Commits = pushEvent.Commits[0:3]
+					}
+
+					for _, commit := range pushEvent.Commits {
+						type CommitContext struct {
+							ShortID       string
+							Message       string
+							Author        Author
+							AddedFiles    int
+							ModifiedFiles int
+							RemovedFiles  int
+						}
+
+						context := CommitContext{
+							ShortID:       commit.Id[0:7],
+							Message:       html.UnescapeString(commit.Message),
+							Author:        commit.Author,
+							AddedFiles:    len(commit.Added),
+							ModifiedFiles: len(commit.Modified),
+							RemovedFiles:  len(commit.Removed),
+						}
+
+						var buf bytes.Buffer
+						err = commitTemplate.Execute(&buf, &context)
+
+						if err != nil {
+							log.Printf("ERROR: %v", err)
+							return
+						}
+						sendMessage(buf.String(), pushEvent.Project.Name, pushEvent.Project.Namespace, channelMapping, bot)
+					}
+
+					if pushEvent.TotalCommits > 3 {
+						var message= fmt.Sprintf("and %d more commits.", pushEvent.TotalCommits-3)
+						sendMessage(message, pushEvent.Project.Name, pushEvent.Project.Namespace, channelMapping, bot)
+					}
+				}
 			}
 
 		default:
