@@ -44,6 +44,13 @@ func CreateFunctionNotifyFunction(bot *irc.Connection, channelMapping *Mapping) 
 	const commitString = "\x0315{{ .ShortID }}\x03 (\x0303+{{ .AddedFiles }}\x03|\x0308±{{ .ModifiedFiles }}\x03|\x0304-{{ .RemovedFiles }}\x03) \x0306{{ .Author.Name }}\x03: {{ .Message }}"
 	const issueString = "[\x0312{{ .Project.Name }}\x03] {{ .User.Name }} {{ .Issue.Action }} issue \x0308#{{ .Issue.Iid }}\x03: {{ .Issue.Title }} {{ .Issue.URL }}"
 	const mergeString = "[\x0312{{ .Project.Name }}\x03] {{ .User.Name }} {{ .Merge.Action }} merge request \x0308#{{ .Merge.Iid }}\x03: {{ .Merge.Title }} {{ .Merge.URL }}"
+	const pipelineString = "[\x0312{{ .Project.Name }}\x03] Pipeline for commit {{ .Pipeline.Commit }} {{ .Pipeline.Status }} in {{ .Pipeline.Duration }} seconds {{ .Project.WebURL }}/pipelines/{{ .Pipeline.Id }}"
+	const jobString = "[\x0312{{ .Repository.Name }}\x03] Job \x0308{{ .Name }}\x03 for commit {{ .Commit }} {{ .Status }} in {{ .Duration }} seconds {{ .Repository.Homepage }}/-/jobs/{{ .Id }}"
+
+	JobStatus := map[string]string{
+		"failed":  "\x0304failed\x03",
+		"success": "\x0303succeded\x03",
+	}
 
 	HookActions := map[string]string{
 		"open":   "opened",
@@ -88,6 +95,16 @@ func CreateFunctionNotifyFunction(bot *irc.Connection, channelMapping *Mapping) 
 	mergeTemplate, err := template.New("merge notification").Parse(mergeString)
 	if err != nil {
 		log.Fatalf("Failed to parse mergeEvent template: %v", err)
+	}
+
+	pipelineTemplate, err := template.New("pipeline notification").Parse(pipelineString)
+	if err != nil {
+		log.Fatalf("Failed to parse pipelineEvent template: %v", err)
+	}
+
+	jobTemplate, err := template.New("job notification").Parse(jobString)
+	if err != nil {
+		log.Fatalf("Failed to parse jobEvent template: %v", err)
 	}
 
 	return func(wr http.ResponseWriter, req *http.Request) {
@@ -156,9 +173,75 @@ func CreateFunctionNotifyFunction(bot *irc.Connection, channelMapping *Mapping) 
 			Merge   Merge   `json:"object_attributes"`
 		}
 
+		type Pipeline struct {
+			Id       int     `json:"id"`
+			Commit   string  `json:"sha"`
+			Status   string  `json:"status"`
+			Duration float64 `json:"duration"`
+		}
+
+		type PipelineEvent struct {
+			Pipeline Pipeline `json:"object_attributes"`
+			Project  Project  `json:"project"`
+		}
+
+		type Repository struct {
+			Name     string `json:"name"`
+			Homepage string `json:"homepage"`
+			URL      string `json:"url"`
+		}
+
+		type JobEvent struct {
+			Id         int        `json:"build_id"`
+			Name       string     `json:"build_name"`
+			Status     string     `json:"build_status"`
+			Duration   float64    `json:"build_duration"`
+			Commit     string     `json:"sha"`
+			Repository Repository `json:"repository"`
+		}
+
 		var buf bytes.Buffer
 
 		switch eventType {
+
+		case "Pipeline Hook":
+			log.Printf("Got a Hook for a Pipeline Event")
+			var pipelineEvent PipelineEvent
+			if err := decoder.Decode(&pipelineEvent); err != nil {
+				log.Fatal(err)
+				return
+			}
+
+			// colorize status
+			pipelineEvent.Pipeline.Status = JobStatus[pipelineEvent.Pipeline.Status]
+
+			// shorten commit id
+			pipelineEvent.Pipeline.Commit = pipelineEvent.Pipeline.Commit[0:7]
+
+			err = pipelineTemplate.Execute(&buf, &pipelineEvent)
+
+			sendMessage(buf.String(), pipelineEvent.Project.Name, pipelineEvent.Project.Namespace, channelMapping, bot)
+
+		case "Job Hook":
+			log.Printf("Got a Hook for a Job Event")
+			var jobEvent JobEvent
+			if err := decoder.Decode(&jobEvent); err != nil {
+				log.Fatal(err)
+				return
+			}
+
+			// colorize status
+			jobEvent.Status = JobStatus[jobEvent.Status]
+
+			// shorten commit id
+			jobEvent.Commit = jobEvent.Commit[0:7]
+
+			// parse namespace from Git URL
+			namespace := strings.Split(strings.Split(jobEvent.Repository.URL, ":")[1], "/")[0]
+
+			err = jobTemplate.Execute(&buf, &jobEvent)
+
+			sendMessage(buf.String(), jobEvent.Repository.Name, namespace, channelMapping, bot)
 
 		case "Merge Request Hook", "Merge Request Event":
 			log.Printf("Got Hook for a Merge Request")
@@ -259,7 +342,7 @@ func CreateFunctionNotifyFunction(bot *irc.Connection, channelMapping *Mapping) 
 					}
 
 					if pushEvent.TotalCommits > 3 {
-						var message= fmt.Sprintf("and %d more commits.", pushEvent.TotalCommits-3)
+						var message = fmt.Sprintf("and %d more commits.", pushEvent.TotalCommits-3)
 						sendMessage(message, pushEvent.Project.Name, pushEvent.Project.Namespace, channelMapping, bot)
 					}
 				}
