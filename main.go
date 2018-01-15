@@ -227,23 +227,24 @@ func CreateFunctionNotifyFunction(bot *irc.Connection, channelMapping *Mapping) 
 				return
 			}
 
-			// colorize status
-			pipelineEvent.Pipeline.Status = JobStatus[pipelineEvent.Pipeline.Status]
-
 			// shorten commit id
 			pipelineEvent.Pipeline.Commit = pipelineEvent.Pipeline.Commit[0:7]
 
 			if pipelineEvent.Pipeline.Status == "running" {
 				// colorize status
 				pipelineEvent.Pipeline.Status = JobStatus[pipelineEvent.Pipeline.Status]
+
 				err = pipelineCreateTemplate.Execute(&buf, &pipelineEvent)
+				sendMessage(buf.String(), pipelineEvent.Project.Name, pipelineEvent.Project.Namespace, channelMapping, bot)
+
 			} else if pipelineEvent.Pipeline.Status == "success" || pipelineEvent.Pipeline.Status == "failed" {
 				// colorize status
 				pipelineEvent.Pipeline.Status = JobStatus[pipelineEvent.Pipeline.Status]
+
 				err = pipelineCompleteTemplate.Execute(&buf, &pipelineEvent)
+				sendMessage(buf.String(), pipelineEvent.Project.Name, pipelineEvent.Project.Namespace, channelMapping, bot)
 			}
 
-			sendMessage(buf.String(), pipelineEvent.Project.Name, pipelineEvent.Project.Namespace, channelMapping, bot)
 
 		case "Job Hook":
 			log.Printf("Got a Hook for a Job Event")
