@@ -223,7 +223,7 @@ func CreateFunctionNotifyFunction(bot *irc.Connection, channelMapping *Mapping) 
 
 			// pending / running
 			if pipelineEvent.Pipeline.Status == "pending" {
-				log.Fatal("Skipping noisy Pipeline Event with status pending")
+				log.Printf("Skipping noisy pipeline event with status: %s", pipelineEvent.Pipeline.Status)
 				return
 			}
 
@@ -254,7 +254,7 @@ func CreateFunctionNotifyFunction(bot *irc.Connection, channelMapping *Mapping) 
 			}
 
 			if jobEvent.Status != "success" && jobEvent.Status != "failed" {
-				log.Fatal("Skipping noisy Job Event with status not success/failed")
+				log.Printf("Skipping noisy job event with status: %s", jobEvent.Status)
 				return
 			}
 
