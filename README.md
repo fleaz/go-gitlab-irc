@@ -1,3 +1,8 @@
+### DEPRECATED!
+This project has been included in the more powerfull and modulare rewrite **CptHook** which you can find at [f-breidenstein/CptHook](https://github.com/f-breidenstein/CptHook)
+
+---
+
 # Acknowledgment
 Thanks to @andir for the original codebase: https://github.com/andir/go-prom-irc
 
